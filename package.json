@@ -1,0 +1,31 @@
+{
+    "name": "endpointvym",
+    "version": "1.0.0",
+    "description": "Endpoint Express.js para el proyecto VisualizadorYM",
+    "main": "index.js",
+    "scripts": {
+        "test": "echo \"Error: no test specified\" && exit 1"
+    },
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/lecruz01/EndpointVYM.git"
+    },
+    "keywords": [
+        "endpoint",
+        "yaneli",
+        "matias",
+        "mapas",
+        "mapbox"
+    ],
+    "author": "Luis Cruz",
+    "license": "MIT",
+    "bugs": {
+        "url": "https://github.com/lecruz01/EndpointVYM/issues"
+    },
+    "homepage": "https://github.com/lecruz01/EndpointVYM#readme",
+    "dependencies": {
+        "body-parser": "^1.18.3",
+        "express": "^4.16.4",
+        "mysql": "^2.16.0"
+    }
+}
