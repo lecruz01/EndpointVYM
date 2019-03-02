@@ -4,6 +4,15 @@ const https = require('https');
 const fs = require('fs');
 const mysql = require('mysql');
 const bodyParser = require('body-parser');
+const multer = require('multer');
+const storage = multer.diskStorage({
+    destination: 'upload/',
+    filename: function(req, file, cb) {
+        cb(null, file.originalname)
+    }
+})
+
+const upload = multer({ storage: storage });
 
 const app = express();
 
@@ -76,18 +85,11 @@ app.route('/api/layers').get((req, res) => {
 /**
  * Ruta para insertar datos de una capa nueva en la BD
  */
-app.route('/api/layers').get((req, res) => {
-    var queryText = "SELECT * FROM Layers;";
-    try {
-        conexion.query(queryText, (err, results) => {});
-    } catch (err) {
-        res.json({
-            "err": err,
-            "statusText": "failure",
-            "ok": false,
-            "message": "Ocurrio un error inesperado"
-        });
-    }
+app.post('/api/layers', upload.single('layerUpload'), (req, res, next) => {
+    console.log(req.file);
+    console.log(req.body);
+    // let uploaded = JSON.parse(fs.readFileSync('upload/' + req.file['filename']));
+    return res.status(200).json({ 'status': 'OK' });
 });
 
 /**
