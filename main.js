@@ -86,69 +86,179 @@ app.route('/api/layers').get((req, res) => {
  * Ruta para insertar datos de una capa nueva en la BD
  */
 app.post('/api/layers', upload.single('layerUpload'), (req, res, next) => {
-    console.log(req.file);
-    console.log(req.body);
-    // let uploaded = JSON.parse(fs.readFileSync('upload/' + req.file['filename']));
-    return res.status(200).json({ 'status': 'OK' });
-});
-
-/**
- * Ruta para insertar un registro a tabla de suscriptores
- */
-app.route('/api/subscribers').post((req, res) => {
-    var params = req.body;
-    var queryText = "CALL CreateNewSubscriber('" +
-        params.endpoint + "','" +
-        params.expirationTime + "','" +
-        params.keys.p256dh + "','" +
-        params.keys.auth + "',@newID); SELECT @newID; SELECT * FROM Subscribers WHERE ID=@newID;";
+    var layerParams = req.body;
+    var fileParams = req.file;
+    var queryInsert = "INSERT INTO capas (Archivo,Nombre,Tipo,Color) VALUES (?,?,?,?)";
     try {
-        // console.log(queryText);
-        conexion.query(queryText, (err, results) => {
-            if (err) throw err;
-            var notificationPayload = {
-                "notification": {
-                    "title": "Xcaret Newsletter",
-                    "body": "Gracias por suscribirte a nuestro newsletter",
-                    "icon": "assets/main-page-logo-small-hat.png",
-                    "vibrate": [100, 50, 100],
-                    "data": {
-                        "dateOfArrival": Date.now(),
-                        "primaryKey": 1
+        conexion.query(
+            queryInsert, [fileParams.filename, layerParams.layerName, layerParams.layerType, layerParams.layerColor],
+            (errors, results) => {
+                if (errors !== null) {
+                    return res.status(500).json({ 'errorsBD': errros, 'status': 'Fail' });
+                } else {
+                    // createObjectCapa(fileParams.path, layerParams);
+
+
+                    /* Definimos el tipo de capa a dibujar */
+                    let type = 'line';
+                    let typeData = 'Feature';
+                    if (layerParams.layerType == 'Puntos') {
+                        type = 'symbol';
+                        typeData = 'FeatureCollection';
                     }
-                }
-            };
-            var datos = results[2];
-            // console.log(datos);
-            var subs = [{
-                "endpoint": datos.endpoint,
-                "expirationTime": datos.expirationTime,
-                "keys": {
-                    "p256dh": datos.P256DH,
-                    "auth": datos.auth
-                }
-            }];
-            // console.log("Sub: " + subs);
-            Promise.all(subs.map(sub => webpush.sendNotification(
-                    sub, JSON.stringify(notificationPayload))))
-                .then(() => res.json({ message: 'Bienvenida enviada.' }))
-                .catch(err => {
-                    res.json({
-                        err: err,
-                        message: "Error al enviar notificación"
+
+                    /* Creamos objeto contenedor */
+                    let layerData = {};
+
+                    /* Definimos atributos adicionales de la capa */
+                    let layout = {};
+                    let paint = {};
+                    if (layerParams.layerType == 'Puntos') {
+                        layerData = {
+                            "layer": {
+                                'id': layerParams.layerName,
+                                'type': type,
+                                'source': {
+                                    'type': 'geojson',
+                                    'data': {
+                                        'type': 'FeatureCollection',
+                                        'features': []
+                                    }
+                                },
+                                'layout': {
+                                    'icon-image': '{icon}-15',
+                                    'text-field': '{title}',
+                                    'text-font': ['Open Sans Semibold'],
+                                    'text-offset': [0, 0.6],
+                                    'text-anchor': 'top'
+                                }
+                            }
+                        };
+                    } else {
+                        layerData = {
+                            "layer": {
+                                'id': layerParams.layerName,
+                                'type': type,
+                                'source': {
+                                    'type': 'geojson',
+                                    'data': {
+                                        'type': 'FeatureCollection',
+                                        'features': []
+                                    }
+                                },
+                                'layout': {
+                                    'line-join': 'round',
+                                    'line-cap': 'round'
+                                },
+                                'paint': {
+                                    'line-color': layerParams.layerColor,
+                                    'line-width': 1
+                                }
+                            }
+                        };
+                    }
+
+                    /* Leemos datos geograficos desde el archivo */
+                    fs.readFile(__dirname + '/' + fileParams.path, (err, data) => {
+                        if (err) {
+                            throw err;
+                        }
+
+                        let fileData = JSON.parse(data);
+                        let featuresInFile = fileData.features;
+
+                        featuresInFile.forEach(element => {
+                            layerData.layer.source.data.features.push(element);
+                        });
+
+                        console.log('JsonRes: ' + layerData);
+                        return res.status(200).json({ 'infoBD': results, 'layerData': layerData, 'status': 'OK' });
                     });
-                });
-        });
+                }
+            });
     } catch (err) {
         res.json({
             "err": err,
             "statusText": "failure",
             "ok": false,
-            "message": "Ocurrio un error inesperado"
+            "message": "Ocurrio un error al insertar los valores en la BD"
         });
     }
 });
 
+/**
+ * Método para crear objeto JSON de capa
+ */
+function createObjectCapa(filePath, params) {
+    try {
+        /* Definimos el tipo de capa a dibujar */
+        let type = 'line';
+        let typeData = 'Feature';
+        if (params.layerType == 'Puntos') {
+            type = 'symbol';
+            typeData = 'FeatureCollection';
+        }
+
+        /* Definimos atributos adicionales de la capa */
+        let layerAttributes = {};
+        if (params.layerType == 'Puntos') {
+            layerAttributes = {
+                'layout': {
+                    'icon-image': '{icon}-15',
+                    'text-field': '{title}',
+                    'text-font': ['Open Sans Semibold'],
+                    'text-offset': [0, 0.6],
+                    'text-anchor': 'top'
+                }
+            };
+        } else {
+            layerAttributes = {
+                'layout': {
+                    'line-join': 'round',
+                    'line-cap': 'round'
+                },
+                'paint': {
+                    'line-color': '#27e1e8',
+                    'line-width': 1
+                }
+            };
+        }
+
+        /* Creamos objeto contenedor */
+        let layerData = {
+            "layer": {
+                'id': params.layerName,
+                'type': type,
+                'source': {
+                    'type': 'geojson',
+                    'data': {
+                        'type': 'FeatureCollection',
+                        'features': []
+                    }
+                },
+                layerAttributes
+            }
+        };
+
+        /* Leemos datos geograficos desde el archivo */
+        fs.readFile(__dirname + '/' + filePath, (err, data) => {
+            if (err) {
+                throw err;
+            }
+
+            let fileData = JSON.parse(data);
+            let featuresInFile = fileData.features;
+
+            featuresInFile.forEach(element => {
+                layerData.layer.source.data.features.push(element);
+            });
+
+            return layerData;
+        });
+    } catch (err) {
+        return { 'status': 'fail', 'errors': err };
+    }
+}
 
 /**
  * Creacion de servidores HTTP y HTTPS
